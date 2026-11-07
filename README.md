@@ -106,3 +106,14 @@ distinct business questions.
   them with realistic business values before adding, and reword the SQL freely —
   the dedupe check is structural, so cosmetic edits won't create false "new"
   patterns.
+
+## License and credits
+
+- The code is released under the [MIT License](LICENSE).
+- The sample queries in `queries_221.json`, `queries_300.jsonl` and the
+  `bird_*` reports are taken from the
+  [BIRD benchmark](https://bird-bench.github.io/) (Li et al., 2023,
+  "Can LLM Already Serve as A Database Interface? A BIg Bench for
+  Large-Scale Database Grounded Text-to-SQLs"), which is licensed under
+  [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+  Those files remain under CC BY-SA 4.0, not MIT.
