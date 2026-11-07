@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sql-dedup demo</title>
+<meta name="description" content="Find duplicate SQL patterns in an NL-to-SQL dataset. Runs in your browser; your file does not go to a server.">
+<style>
+:root {
+  --bg: #f7f6f2; --surface: #ffffff; --surface-2: #f0eee8; --ink: #1c1b19; --ink-2: #55524b; --ink-3: #85817a;
+  --line: #dedad1; --accent: #2f5fd0; --accent-ink: #ffffff; --accent-soft: #e5ecfb; --ok: #1f7a4d; --ok-soft: #e1f2e8;
+  --bad: #b3372d; --bad-soft: #f8e3e0; --warn: #9a6400; --warn-soft: #f8eed8; --code-bg: #f3f1ec;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.04);
+  --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  --sans: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141413; --surface: #1d1c1a; --surface-2: #252421; --ink: #ecebe6; --ink-2: #b5b2aa; --ink-3: #8a877f;
+    --line: #34322e; --accent: #7fa2f5; --accent-ink: #10172b; --accent-soft: #1f2a45; --ok: #5cc28e; --ok-soft: #173326;
+    --bad: #ef7f74; --bad-soft: #3a1f1c; --warn: #e0ad4f; --warn-soft: #3a2e15; --code-bg: #232220; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141413; --surface: #1d1c1a; --surface-2: #252421; --ink: #ecebe6; --ink-2: #b5b2aa; --ink-3: #8a877f;
+  --line: #34322e; --accent: #7fa2f5; --accent-ink: #10172b; --accent-soft: #1f2a45; --ok: #5cc28e; --ok-soft: #173326;
+  --bad: #ef7f74; --bad-soft: #3a1f1c; --warn: #e0ad4f; --warn-soft: #3a2e15; --code-bg: #232220; --shadow: none;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1000px; margin: 0 auto; padding: 0 16px; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre, textarea, .mono { font-family: var(--mono); }
+:not(pre) > code { font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; border: 1px solid var(--line); }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; font-size: 13px; line-height: 1.5; margin: 8px 0 0; }
+
+header { padding: 44px 0 24px; }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.brand { font: 700 15px var(--mono); }
+.links { display: flex; gap: 16px; font-size: 14px; }
+h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.1; letter-spacing: -.02em; margin: 26px 0 12px; }
+.lede { font-size: 18px; color: var(--ink-2); max-width: 720px; margin: 0; }
+.privacy { display: inline-flex; gap: 8px; align-items: center; margin-top: 16px; font-size: 14px; color: var(--ok);
+  background: var(--ok-soft); border: 1px solid var(--ok); border-radius: 999px; padding: 4px 12px; }
+
+h2 { font-size: 22px; margin: 0 0 4px; letter-spacing: -.01em; }
+.sub { color: var(--ink-2); margin: 0 0 16px; }
+section { padding: 22px 0; }
+
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; box-shadow: var(--shadow); }
+.card h3 { margin: 0 0 6px; font-size: 16px; }
+.card p { margin: 0 0 6px; color: var(--ink-2); font-size: 15px; }
+.card ul { margin: 6px 0 0; padding-left: 20px; color: var(--ink-2); font-size: 15px; }
+.card li { margin: 3px 0; }
+.kicker { font: 700 11px var(--mono); letter-spacing: .08em; color: var(--accent); text-transform: uppercase; display: block; margin-bottom: 8px; }
+.ex { font-size: 13px; color: var(--ink-3); margin-top: 10px; }
+.ex b { color: var(--ink-2); }
+
+/* try panel */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+.tabs { display: flex; border-bottom: 1px solid var(--line); background: var(--surface-2); overflow-x: auto; }
+.tab { appearance: none; border: 0; background: none; font: 600 15px var(--sans); color: var(--ink-2); padding: 14px 18px; cursor: pointer;
+  border-bottom: 2px solid transparent; white-space: nowrap; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); background: var(--surface); }
+.pane { padding: 18px; }
+.pane[hidden] { display: none; }
+.samples { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sample { text-align: left; appearance: none; border: 1.5px solid var(--line); background: var(--surface); border-radius: 10px; padding: 14px;
+  cursor: pointer; font: inherit; color: inherit; }
+.sample:hover { border-color: var(--accent); }
+.sample[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.sample b { display: block; font-size: 15px; }
+.sample span { color: var(--ink-2); font-size: 14px; }
+.drop { border: 2px dashed var(--line); border-radius: 12px; padding: 28px 16px; text-align: center; color: var(--ink-2); cursor: pointer; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop b { color: var(--ink); }
+.drop .fname { margin-top: 8px; font: 600 14px var(--mono); color: var(--accent); }
+textarea { width: 100%; min-height: 190px; resize: vertical; border: 1px solid var(--line); border-radius: 10px; padding: 12px;
+  background: var(--code-bg); color: var(--ink); font-size: 13.5px; line-height: 1.5; }
+.hint { font-size: 13.5px; color: var(--ink-3); margin: 8px 0 0; }
+
+.opts { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; padding: 14px 18px; border-top: 1px solid var(--line); background: var(--surface-2); }
+.opts label { font-size: 14px; color: var(--ink-2); display: inline-flex; gap: 8px; align-items: center; }
+select, input[type=text] { font: 14px var(--sans); padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+input[type=text] { width: 130px; font-family: var(--mono); font-size: 13px; }
+details.adv summary { cursor: pointer; font-size: 14px; color: var(--ink-2); }
+details.adv[open] { flex-basis: 100%; }
+details.adv .row { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; }
+.run { margin-left: auto; appearance: none; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink);
+  font: 700 15px var(--sans); padding: 10px 22px; cursor: pointer; }
+.run:disabled { opacity: .5; cursor: progress; }
+.status { font-size: 13.5px; color: var(--ink-3); padding: 0 18px 14px; background: var(--surface-2); }
+.status.err { color: var(--bad); }
+
+/* results */
+#results[hidden] { display: none; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.stat b { display: block; font-size: 28px; line-height: 1.1; }
+.stat small { color: var(--ink-2); font-size: 13px; }
+.stat.bad b { color: var(--bad); }
+.stat.ok b { color: var(--ok); }
+.table { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); background: var(--surface-2); }
+tr:last-child td { border-bottom: 0; }
+tr.cur td { background: var(--accent-soft); font-weight: 600; }
+.bar { height: 8px; border-radius: 4px; background: var(--surface-2); min-width: 80px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--bad); border-radius: 4px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin: 22px 0 12px; }
+.toolbar h3 { margin: 0; font-size: 18px; }
+.btn { appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 8px;
+  padding: 7px 12px; font: 600 14px var(--sans); cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { appearance: none; border: 0; background: var(--surface); color: var(--ink-2); padding: 6px 12px; font: 600 13px var(--sans); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.group { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+.group.dup { border-left: 4px solid var(--bad); }
+.group.uniq { border-left: 4px solid var(--ok); }
+.ghead { padding: 10px 14px; display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; background: var(--surface-2); border-bottom: 1px solid var(--line); }
+.ghead b { font-size: 14px; }
+.ghead .fp { font: 12px var(--mono); color: var(--ink-3); word-break: break-all; flex-basis: 100%; }
+.member { display: grid; grid-template-columns: 100px 1fr; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.member:last-child { border-bottom: 0; }
+.badge { font: 700 11px var(--mono); letter-spacing: .05em; padding: 3px 7px; border-radius: 5px; height: fit-content; text-align: center; }
+.badge.kept { color: var(--ok); background: var(--ok-soft); }
+.badge.duplicate { color: var(--bad); background: var(--bad-soft); }
+.member .nl { font-size: 14.5px; }
+.member .nl i { color: var(--ink-3); }
+.member .row-n { font: 12px var(--mono); color: var(--ink-3); }
+.member pre { margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
+.more { text-align: center; margin: 10px 0; }
+.empty { color: var(--ink-3); text-align: center; padding: 24px; }
+
+footer { border-top: 1px solid var(--line); margin-top: 40px; padding: 22px 0 44px; color: var(--ink-3); font-size: 13px; }
+footer p { margin: 4px 0; }
+
+@media (max-width: 760px) {
+  .grid3, .grid2, .samples { grid-template-columns: 1fr; }
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .member { grid-template-columns: 1fr; gap: 4px; }
+  .badge { justify-self: start; }
+  .run { margin-left: 0; width: 100%; }
+  header { padding-top: 28px; }
+}
+</style>
+</head>
+<body>
+
+<header><div class="wrap">
+  <div class="top">
+    <div class="brand">sql-dedup</div>
+    <nav class="links">
+      <a href="README.html">Full guide</a>
+      <a href="https://github.com/ranjankndev/sql-dedup">GitHub</a>
+    </nav>
+  </div>
+  <h1>Find duplicate SQL patterns in your NL&nbsp;→&nbsp;SQL dataset</h1>
+  <p class="lede">Many queries in a text-to-SQL dataset have the same structure. Only the values or the table and column names are different. These duplicates do not improve the training. This tool finds them and gives you a file with only the unique patterns.</p>
+  <div class="privacy">🔒 The tool runs in your browser. Your file does not go to a server.</div>
+</div></header>
+
+<main class="wrap">
+
+<section>
+  <div class="grid3">
+    <div class="card">
+      <span class="kicker">What the tool does</span>
+      <h3>Compares the SQL structure, not the text</h3>
+      <p>The tool parses each query and changes it to a standard form. Two queries with the same standard form are duplicates. The tool keeps the first query and marks the others.</p>
+      <ul>
+        <li><b>exact</b>: spaces, letter case and comments are ignored.</li>
+        <li><b>template</b>: values are also ignored.</li>
+        <li><b>skeleton</b>: table and column names are also ignored.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <span class="kicker">Input</span>
+      <h3>A file of question + SQL pairs</h3>
+      <p>Use one of these:</p>
+      <ul>
+        <li><code>.json</code>: an array of objects</li>
+        <li><code>.jsonl</code>: one object on each line</li>
+        <li><code>.csv</code>: one row for each pair</li>
+        <li>Or paste only the SQL queries.</li>
+      </ul>
+      <p class="ex"><b>Field names are found automatically.</b> SQL: <code>sql</code>, <code>query</code>, <code>SQL</code>, <code>gold_sql</code> … Question: <code>question</code>, <code>nl</code>, <code>instruction</code> …</p>
+      <pre>{"question": "Customers older than 30",
+ "sql": "SELECT name FROM customers WHERE age &gt; 30"}</pre>
+    </div>
+    <div class="card">
+      <span class="kicker">Expected output</span>
+      <h3>A report and a clean file</h3>
+      <ul>
+        <li>The number of pairs, unique patterns and duplicates.</li>
+        <li>The duplicate rate at each of the three levels.</li>
+        <li>Each pattern group, with the kept query and its duplicates.</li>
+        <li><b>Download</b>: the unique pairs in the same format as your file.</li>
+        <li><b>Download</b>: a JSON report of the duplicate groups.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="try">
+  <h2>Try it</h2>
+  <p class="sub">Select a sample, upload a file or paste SQL. Then click <b>Find duplicates</b>.</p>
+  <div class="panel">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-pane="p-sample">Sample file</button>
+      <button class="tab" role="tab" aria-selected="false" data-pane="p-upload">Upload a file</button>
+      <button class="tab" role="tab" aria-selected="false" data-pane="p-paste">Paste SQL</button>
+    </div>
+
+    <div class="pane" id="p-sample">
+      <div class="samples">
+        <button class="sample" aria-pressed="true" data-file="demo/sample_queries.jsonl" data-dialect="">
+          <b>10 small queries</b>
+          <span>A bank schema. It has one example of each duplicate type. Start here.</span>
+        </button>
+        <button class="sample" aria-pressed="false" data-file="queries_221.json" data-dialect="sqlite">
+          <b>221 BIRD benchmark queries</b>
+          <span>Real text-to-SQL data from the BIRD benchmark (CC BY-SA 4.0).</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="pane" id="p-upload" hidden>
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept=".json,.jsonl,.csv,.txt" hidden>
+        <div><b>Click to select a file</b> or drop it here</div>
+        <div class="hint">.json, .jsonl or .csv · the file stays in your browser</div>
+        <div class="fname" id="fname"></div>
+      </label>
+    </div>
+
+    <div class="pane" id="p-paste" hidden>
+      <textarea id="paste" spellcheck="false" placeholder="SELECT * FROM customers;
+select *  from customers;
+SELECT name FROM customers WHERE age > 30;
+SELECT id FROM accounts WHERE balance > 1000;"></textarea>
+      <p class="hint">Put a <code>;</code> after each query. If there is no <code>;</code>, the tool uses one line for each query.</p>
+    </div>
+
+    <div class="opts">
+      <label>Level
+        <select id="level">
+          <option value="skeleton" selected>skeleton (default)</option>
+          <option value="template">template</option>
+          <option value="exact">exact</option>
+        </select>
+      </label>
+      <label title="The SQL language of your queries. Use it when some queries cannot be parsed.">SQL dialect
+        <select id="dialect">
+          <option value="" selected>generic</option>
+          <option value="sqlite">SQLite</option>
+          <option value="postgres">PostgreSQL</option>
+          <option value="mysql">MySQL</option>
+          <option value="tsql">SQL Server (T-SQL)</option>
+          <option value="oracle">Oracle</option>
+          <option value="snowflake">Snowflake</option>
+          <option value="bigquery">BigQuery</option>
+          <option value="spark">Spark SQL</option>
+        </select>
+      </label>
+      <label title="Two pairs are duplicates only if the questions are also similar."><input type="checkbox" id="fuzzy"> Compare the questions too</label>
+      <details class="adv"><summary>Field names</summary>
+        <div class="row">
+          <label>Question field <input type="text" id="nlf" placeholder="auto"></label>
+          <label>SQL field <input type="text" id="sqlf" placeholder="auto"></label>
+        </div>
+      </details>
+      <button class="run" id="run">Find duplicates</button>
+    </div>
+    <div class="status" id="status">Loading Python in your browser (about 10 MB, first visit only)…</div>
+  </div>
+</section>
+
+<section id="results" hidden>
+  <h2>Results</h2>
+  <p class="sub" id="rsub"></p>
+  <div class="stats">
+    <div class="stat"><b id="s-total">0</b><small>pairs in the input</small></div>
+    <div class="stat ok"><b id="s-unique">0</b><small>unique patterns (kept)</small></div>
+    <div class="stat bad"><b id="s-dup">0</b><small>duplicates</small></div>
+    <div class="stat"><b id="s-pct">0%</b><small>duplicate rate</small></div>
+  </div>
+
+  <div class="table"><table>
+    <thead><tr><th>Level</th><th>Unique patterns</th><th>Duplicates</th><th>Rate</th><th></th></tr></thead>
+    <tbody id="levels"></tbody>
+  </table></div>
+
+  <div class="toolbar">
+    <h3>Pattern groups</h3>
+    <div class="seg" id="filter">
+      <button aria-pressed="true" data-f="dup">Duplicates only</button>
+      <button aria-pressed="false" data-f="all">All groups</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn primary" id="dl-unique">Download unique pairs</button>
+      <button class="btn" id="dl-report">Download report</button>
+    </div>
+  </div>
+  <div id="groups"></div>
+</section>
+
+</main>
+
+<footer><div class="wrap">
+  <p>sql-dedup uses <a href="https://github.com/tobymao/sqlglot">sqlglot</a> to parse SQL and <a href="https://pyodide.org">Pyodide</a> to run Python in the browser. The code has the <a href="LICENSE">MIT License</a>.</p>
+  <p>To check queries on a real database, find coverage gaps and make candidate SQL, use the command-line tool. See the <a href="README.html">full guide</a>.</p>
+</div></footer>
+
+<script type="text/python" id="pycode">
+import json
+from pathlib import Path
+import sqlpattern as sp
+
+def analyze(path, level, nl_mode, nl_field, sql_field, out_path, dialect=""):
+    dialect = dialect or None
+    try:
+        rows = [r for r, _ in sp.load_dataset(Path(path))]
+        if not rows:
+            raise ValueError("The file has no records.")
+        if not isinstance(rows[0], dict):
+            raise ValueError("Each record must be an object with a question field and an SQL field.")
+        nlf, sqlf = sp.detect_fields(rows[0], nl_field or None, sql_field or None)
+    except SystemExit as e:
+        raise ValueError(str(e).replace("error: ", "").replace("pass --sql-field explicitly", "type the SQL field name under 'Field names'"))
+    except json.JSONDecodeError as e:
+        raise ValueError(f"The file is not valid JSON: {e}")
+
+    levels = []
+    for lv in sp.LEVELS:
+        idx = sp.PatternIndex(lv, dialect)
+        kept, dropped = sp.run_pass(rows, nlf, sqlf, idx)
+        levels.append({"level": lv, "unique": len(idx.groups), "dup": len(dropped)})
+
+    idx = sp.PatternIndex(level, dialect, nl_mode=nl_mode)
+    groups, order, kept_rows = {}, [], []
+    for i, rec in enumerate(rows):
+        nl = str(rec.get(nlf, "") if nlf else "")
+        sql = str(rec.get(sqlf, ""))
+        key, canon, g = idx.match(nl, sql)
+        if g is None:
+            idx.add(key, canon, nl, sql)
+            status = "kept"
+            kept_rows.append(rec)
+        else:
+            g["count"] += 1
+            status = "duplicate"
+        if key not in groups:
+            groups[key] = {"pattern": canon, "members": []}
+            order.append(key)
+        groups[key]["members"].append({"row": i + 1, "nl": nl, "sql": sql, "status": status})
+
+    sp.write_dataset(Path(out_path), kept_rows)
+    dup_total = len(rows) - len(kept_rows)
+    report = {
+        "level": level, "dialect": dialect or "generic", "nl_mode": nl_mode, "total": len(rows),
+        "kept": len(kept_rows), "dropped": dup_total,
+        "sql_parse_failures": idx.parse_failures,
+        "duplicate_groups": [
+            {"pattern": groups[k]["pattern"], "count": len(groups[k]["members"]),
+             "members": groups[k]["members"]}
+            for k in sorted(order, key=lambda k: -len(groups[k]["members"]))
+            if any(m["status"] == "duplicate" for m in groups[k]["members"])
+        ],
+    }
+    return json.dumps({
+        "fields": {"nl": nlf, "sql": sqlf},
+        "total": len(rows), "kept": len(kept_rows), "dup": dup_total,
+        "parse_failures": idx.parse_failures,
+        "levels": levels,
+        "groups": [groups[k] for k in order],
+        "report": report,
+    })
+</script>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const statusEl = $("status"), runBtn = $("run");
+  const setStatus = (t, err = false) => { statusEl.textContent = t; statusEl.classList.toggle("err", err); };
+
+  // ---------- Python boot ----------
+  const ready = (async () => {
+    const py = await loadPyodide();
+    setStatus("Installing the SQL parser (sqlglot)…");
+    await py.loadPackage("micropip");
+    await py.pyimport("micropip").install("sqlglot==30.17.0");
+    const src = await (await fetch("sqlpattern.py")).text();
+    py.FS.writeFile("/home/pyodide/sqlpattern.py", src);
+    py.runPython("import sys; sys.path.insert(0, '/home/pyodide')");
+    py.runPython($("pycode").textContent);
+    setStatus("Ready. Select an input and click Find duplicates.");
+    return py;
+  })();
+  ready.catch((e) => setStatus("Python could not load: " + e.message + ". Reload the page to try again.", true));
+
+  // ---------- input tabs ----------
+  let mode = "sample";
+  document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((x) => x.setAttribute("aria-selected", x === t));
+    document.querySelectorAll(".pane").forEach((p) => p.hidden = p.id !== t.dataset.pane);
+    mode = t.dataset.pane.slice(2);
+  }));
+  let sampleFile = "demo/sample_queries.jsonl";
+  document.querySelectorAll(".sample").forEach((b) => b.addEventListener("click", () => {
+    document.querySelectorAll(".sample").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    sampleFile = b.dataset.file;
+    $("dialect").value = b.dataset.dialect || "";
+  }));
+
+  let upload = null;
+  const drop = $("drop"), fileIn = $("file");
+  const takeFile = (f) => { if (!f) return; upload = f; $("fname").textContent = `${f.name} · ${(f.size / 1024).toFixed(1)} KB`; };
+  fileIn.addEventListener("change", () => takeFile(fileIn.files[0]));
+  ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", (e) => takeFile(e.dataTransfer.files[0]));
+
+  // split pasted SQL on ';' outside quotes, else one query per line
+  function splitSql(text) {
+    const out = []; let cur = "", q = null, sawSemi = false;
+    for (const ch of text) {
+      if (q) { if (ch === q) q = null; cur += ch; continue; }
+      if (ch === "'" || ch === '"') { q = ch; cur += ch; continue; }
+      if (ch === ";") { sawSemi = true; if (cur.trim()) out.push(cur.trim()); cur = ""; continue; }
+      cur += ch;
+    }
+    if (cur.trim()) out.push(cur.trim());
+    if (sawSemi) return out;
+    return text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  }
+
+  async function getInput() {
+    if (mode === "sample") {
+      const r = await fetch(sampleFile);
+      if (!r.ok) throw new Error("The sample file could not load.");
+      return { name: sampleFile.split("/").pop(), text: await r.text() };
+    }
+    if (mode === "upload") {
+      if (!upload) throw new Error("Select a file first.");
+      return { name: upload.name, text: await upload.text() };
+    }
+    const qs = splitSql($("paste").value);
+    if (!qs.length) throw new Error("Paste one or more SQL queries first.");
+    return { name: "pasted.jsonl", text: qs.map((s) => JSON.stringify({ question: "", sql: s })).join("\n") };
+  }
+
+  // ---------- run ----------
+  let last = null, filter = "dup";
+  runBtn.addEventListener("click", async () => {
+    runBtn.disabled = true;
+    try {
+      const inp = await getInput();
+      setStatus("Waiting for Python to load…");
+      const py = await ready;
+      setStatus("Finding duplicates…");
+      let ext = (inp.name.match(/\.(jsonl|json|csv)$/i) || [, "jsonl"])[1].toLowerCase();
+      if (ext === "json" && inp.text.trimStart()[0] === "{" ) ext = "jsonl";
+      const inPath = "/tmp/input." + ext, outPath = "/tmp/output." + ext;
+      py.FS.writeFile(inPath, inp.text);
+      const level = $("level").value, nlMode = $("fuzzy").checked ? "fuzzy" : "off";
+      const res = JSON.parse(py.globals.get("analyze")(inPath, level, nlMode, $("nlf").value.trim(), $("sqlf").value.trim(), outPath, $("dialect").value));
+      res.uniqueText = py.FS.readFile(outPath, { encoding: "utf8" });
+      res.name = inp.name; res.ext = ext; res.level = level; res.nlMode = nlMode; res.dialect = $("dialect").value || "generic";
+      last = res;
+      render();
+      setStatus(`Done: ${res.total} pairs checked.` + (res.parse_failures ? ` ${res.parse_failures} queries could not be parsed, so the tool used a text match for them. Select the correct SQL dialect and run again.` : ""));
+      $("results").hidden = false;
+      $("results").scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) {
+      const msg = String(e.message || e).split("\n").filter(Boolean);
+      const py = msg.find((l) => /^(ValueError|SystemExit|JSONDecodeError|UnicodeDecodeError)/.test(l.trim()));
+      setStatus((py ? py.replace(/^\s*\w+Error:\s*/, "") : msg[msg.length - 1] || "Error"), true);
+    } finally {
+      runBtn.disabled = false;
+    }
+  });
+
+  // ---------- render ----------
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const pct = (a, b) => b ? (100 * a / b).toFixed(1) + "%" : "0%";
+  const PAGE = 50; let shown = PAGE;
+
+  function render() {
+    const r = last;
+    $("rsub").innerHTML = `<b>${esc(r.name)}</b> · level <code>${r.level}</code> · dialect <code>${esc(r.dialect)}</code>${r.nlMode === "fuzzy" ? " · questions compared" : ""} · fields: question = <code>${esc(r.fields.nl || "none")}</code>, SQL = <code>${esc(r.fields.sql)}</code>`;
+    $("s-total").textContent = r.total;
+    $("s-unique").textContent = r.kept;
+    $("s-dup").textContent = r.dup;
+    $("s-pct").textContent = pct(r.dup, r.total);
+    $("levels").innerHTML = r.levels.map((l) => `<tr class="${l.level === r.level && r.nlMode === "off" ? "cur" : ""}">
+      <td><code>${l.level}</code></td><td>${l.unique}</td><td>${l.dup}</td><td>${pct(l.dup, r.total)}</td>
+      <td style="width:30%"><div class="bar"><i style="width:${r.total ? 100 * l.dup / r.total : 0}%"></i></div></td></tr>`).join("");
+    shown = PAGE;
+    renderGroups();
+  }
+
+  function renderGroups() {
+    const r = last;
+    let gs = r.groups.map((g) => ({ ...g, nDup: g.members.filter((m) => m.status === "duplicate").length }));
+    if (filter === "dup") gs = gs.filter((g) => g.nDup > 0).sort((a, b) => b.members.length - a.members.length);
+    if (!gs.length) { $("groups").innerHTML = `<div class="empty">No duplicates at this level. Every query has a unique pattern.</div>`; return; }
+    const html = gs.slice(0, shown).map((g) => `<div class="group ${g.nDup ? "dup" : "uniq"}">
+      <div class="ghead"><b>${g.members.length} ${g.members.length === 1 ? "query" : "queries"}</b>
+        <span style="color:var(--ink-3);font-size:13px">${g.nDup ? g.nDup + " duplicate" + (g.nDup > 1 ? "s" : "") : "unique"}</span>
+        <div class="fp" title="The standard form that the tool compares">pattern: ${esc(g.pattern)}</div></div>
+      ${g.members.map((m) => `<div class="member"><span class="badge ${m.status}">${m.status.toUpperCase()}</span><div>
+        <div class="nl">${m.nl ? esc(m.nl) : "<i>(no question)</i>"} <span class="row-n">· row ${m.row}</span></div>
+        <pre>${esc(m.sql)}</pre></div></div>`).join("")}
+    </div>`).join("");
+    $("groups").innerHTML = html + (gs.length > shown ? `<div class="more"><button class="btn" id="more">Show more (${gs.length - shown} left)</button></div>` : "");
+    const more = $("more"); if (more) more.addEventListener("click", () => { shown += PAGE; renderGroups(); });
+  }
+
+  $("filter").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    filter = b.dataset.f;
+    document.querySelectorAll("#filter button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    if (last) { shown = PAGE; renderGroups(); }
+  });
+
+  function download(name, text, type) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], { type }));
+    a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  const stem = () => last.name.replace(/\.(jsonl|json|csv)$/i, "");
+  $("dl-unique").addEventListener("click", () => last && download(`${stem()}.unique.${last.ext}`, last.uniqueText,
+    last.ext === "csv" ? "text/csv" : "application/json"));
+  $("dl-report").addEventListener("click", () => last && download(`${stem()}.report.json`,
+    JSON.stringify({ input: last.name, ...last.report }, null, 2), "application/json"));
+})();
+</script>
+</body>
+</html>

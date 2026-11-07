@@ -1,5 +1,7 @@
 # sql-dedup — NL→SQL dataset workbench
 
+> **Try it in your browser:** https://ranjankndev.github.io/sql-dedup/ — upload a JSON/JSONL/CSV file or paste SQL; nothing is sent to a server.
+>
 > Full illustrated guide with architecture diagrams: open [README.html](README.html) in a browser.
 > The CLI keeps its file names: `sqlds.py` (workbench) and `sqlpattern.py` (standalone dedupe).
 

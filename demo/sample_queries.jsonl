@@ -1,0 +1,10 @@
+{"question": "Show all customers", "sql": "SELECT * FROM customers"}
+{"question": "List every customer", "sql": "select *  from customers;"}
+{"question": "Names of customers older than 30", "sql": "SELECT name FROM customers WHERE age > 30"}
+{"question": "Names of customers older than 65", "sql": "SELECT name FROM customers WHERE age > 65"}
+{"question": "Ids of accounts with a balance over 1000", "sql": "SELECT id FROM accounts WHERE balance > 1000"}
+{"question": "Customers in Pune who are older than 40", "sql": "SELECT name FROM customers WHERE city = 'Pune' AND age > 40"}
+{"question": "Customers older than 25 who live in Mumbai", "sql": "SELECT name FROM customers WHERE age > 25 AND city = 'Mumbai'"}
+{"question": "Number of accounts for each customer", "sql": "SELECT customer_id, COUNT(*) FROM accounts GROUP BY customer_id"}
+{"question": "Total balance for each city", "sql": "SELECT c.city, SUM(a.balance) FROM customers c JOIN accounts a ON c.id = a.customer_id GROUP BY c.city"}
+{"question": "Top 5 customers by total balance", "sql": "WITH t AS (SELECT customer_id, SUM(balance) AS total FROM accounts GROUP BY customer_id) SELECT customer_id, total FROM t ORDER BY total DESC LIMIT 5"}
