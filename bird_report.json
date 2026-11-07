@@ -1,0 +1,114 @@
+{
+  "input": "queries_221.json",
+  "level": "skeleton",
+  "nl_mode": "off",
+  "total": 221,
+  "unique_patterns": 199,
+  "kept": 199,
+  "dropped": 22,
+  "sql_parse_failures": 0,
+  "duplicate_groups": [
+    {
+      "pattern": "select n1 from n2 where n3 = ?",
+      "count": 5,
+      "example_nl": "What's the reference name of Marina Bay Street Circuit?",
+      "example_sql": "SELECT circuitRef FROM circuits WHERE name = 'Marina Bay Street Circuit'"
+    },
+    {
+      "pattern": "select distinct n2.n1 from n3 as n2 inner join n4 as n5 on n2.n6 = n5.n6 where n5.n7 = ?",
+      "count": 3,
+      "example_nl": "Who are the players that tend to be attacking when their mates were doing attack moves? List down their name.",
+      "example_sql": "SELECT DISTINCT t1.player_name FROM Player AS t1 INNER JOIN Player_Attributes AS t2 ON t1.player_api_id = t2.player_api_id WHERE t2.attacking_work_rate = 'high'"
+    },
+    {
+      "pattern": "select distinct n2.n1, n2.n3 from n4 as n2 inner join n5 as n6 on n6.n7 = n2.n7 where n6.n8 = ?",
+      "count": 3,
+      "example_nl": "What is the coordinates location of the circuits for Australian grand prix?",
+      "example_sql": "SELECT DISTINCT T1.lat, T1.lng FROM circuits AS T1 INNER JOIN races AS T2 ON T2.circuitID = T1.circuitId WHERE T2.name = 'Australian Grand Prix'"
+    },
+    {
+      "pattern": "select cast(sum(n4.n8) as real) / count(n4.n3) from n1 as n5 inner join n2 as n4 on n5.n6 = n4.n6 where n5.n7 = ?",
+      "count": 2,
+      "example_nl": "Find the average number of long-shot done by Ahmed Samir Farag.",
+      "example_sql": "SELECT CAST(SUM(t2.long_shots) AS REAL) / COUNT(t2.`date`) FROM Player AS t1 INNER JOIN Player_Attributes AS t2 ON t1.player_api_id = t2.player_api_id WHERE t1.player_name = 'Ahmed Samir Farag'"
+    },
+    {
+      "pattern": "select count(n1) from n2 where n3 = ? and n4 = ?",
+      "count": 2,
+      "example_nl": "Among the players whose preferred foot was the left foot when attacking, how many of them would remain in his position when the team attacked?",
+      "example_sql": "SELECT COUNT(player_api_id) FROM Player_Attributes WHERE preferred_foot = 'left' AND attacking_work_rate = 'low'"
+    },
+    {
+      "pattern": "select n2.n1 from n3 as n5 inner join n4 as n2 on n5.n6 = n2.n6 where n5.n7 = ? and n2.n8 like ?",
+      "count": 2,
+      "example_nl": "Tell the build Up play passing class for \"FC Lorient\" on 2010/2/22.",
+      "example_sql": "SELECT t2.buildUpPlayPassingClass FROM Team AS t1 INNER JOIN Team_Attributes AS t2 ON t1.team_api_id = t2.team_api_id WHERE t1.team_long_name = 'FC Lorient' AND t2.`date` LIKE '2010-02-22%'"
+    },
+    {
+      "pattern": "select distinct n2.n1 from n3 as n2 inner join n4 as n5 on n2.n6 = n5.n6 where n5.n7 = (select max(n7) from n4)",
+      "count": 2,
+      "example_nl": "State the name of the most strongest player.",
+      "example_sql": "SELECT DISTINCT t1.player_name FROM Player AS t1 INNER JOIN Player_Attributes AS t2 ON t1.player_api_id = t2.player_api_id WHERE t2.overall_rating = (SELECT MAX(overall_rating) FROM Player_Attributes)"
+    },
+    {
+      "pattern": "select n2.n1 from n3 as n5 inner join n4 as n2 on n2.n6 = n5.n6 where n5.n7 = ? order by n5.n8 desc limit ?",
+      "count": 2,
+      "example_nl": "Please list the reference names of the drivers who are eliminated in the first period in race number 20.",
+      "example_sql": "SELECT T2.driverRef FROM qualifying AS T1 INNER JOIN drivers AS T2 ON T2.driverId = T1.driverId WHERE T1.raceId = 20 ORDER BY T1.q1 DESC LIMIT 5"
+    },
+    {
+      "pattern": "select n2.n1 from n3 as n5 inner join n4 as n2 on n2.n6 = n5.n6 where n5.n7 = ? and n5.n8 like ?",
+      "count": 2,
+      "example_nl": "What is his number of the driver who finished 0:01:54 in the Q3 of qualifying race No.903?",
+      "example_sql": "SELECT T2.number FROM qualifying AS T1 INNER JOIN drivers AS T2 ON T2.driverId = T1.driverId WHERE T1.raceId = 903 AND T1.q3 LIKE '1:54%'"
+    },
+    {
+      "pattern": "select n2.n1 from n3 as n6 inner join n4 as n7 on n6.n8 = n7.n9 inner join n5 as n2 on n7.n10 = n2.n8 where n6.n11 = ?",
+      "count": 2,
+      "example_nl": "Please list all the superpowers of 3-D Man.",
+      "example_sql": "SELECT T3.power_name FROM superhero AS T1 INNER JOIN hero_power AS T2 ON T1.id = T2.hero_id INNER JOIN superpower AS T3 ON T2.power_id = T3.id WHERE T1.superhero_name = '3-D Man'"
+    },
+    {
+      "pattern": "select n2.n1 from n3 as n2 inner join n4 as n5 on n2.n6 = n5.n7 inner join n4 as n8 on n2.n9 = n8.n7 where n5.n4 = ? and n8.n4 = ?",
+      "count": 2,
+      "example_nl": "Please list the superhero names of all the superheroes that have blue eyes and blond hair.",
+      "example_sql": "SELECT T1.superhero_name FROM superhero AS T1 INNER JOIN colour AS T2 ON T1.eye_colour_id = T2.id INNER JOIN colour AS T3 ON T1.hair_colour_id = T3.id WHERE T2.colour = 'Blue' AND T3.colour = 'Blond'"
+    },
+    {
+      "pattern": "select n2.n1 from n3 as n4 inner join n1 as n2 on n4.n5 = n2.n6 where n4.n7 = ?",
+      "count": 2,
+      "example_nl": "What is Copycat's race?",
+      "example_sql": "SELECT T2.race FROM superhero AS T1 INNER JOIN race AS T2 ON T1.race_id = T2.id WHERE T1.superhero_name = 'Copycat'"
+    },
+    {
+      "pattern": "select sum(case when n4.n7 = ? then ? else ? end) - sum(case when n4.n7 = ? then ? else ? end) from n1 as n3 inner join n2 as n4 on n3.n5 = n4.n6",
+      "count": 2,
+      "example_nl": "Between DC and Marvel Comics, which publisher has published more superheroes? Find the difference in the number of superheroes they have published.",
+      "example_sql": "SELECT SUM(CASE WHEN T2.publisher_name = 'Marvel Comics' THEN 1 ELSE 0 END) - SUM(CASE WHEN T2.publisher_name = 'DC Comics' THEN 1 ELSE 0 END) FROM superhero AS T1 INNER JOIN publisher AS T2 ON T1.publisher_id = T2.id"
+    },
+    {
+      "pattern": "select count(n2.n1) from n3 as n2 inner join n4 as n5 on n2.n6 = n5.n7 where n5.n8 = ?",
+      "count": 2,
+      "example_nl": "How many heroes have stealth power?",
+      "example_sql": "SELECT COUNT(T1.hero_id) FROM hero_power AS T1 INNER JOIN superpower AS T2 ON T1.power_id = T2.id WHERE T2.power_name = 'Stealth'"
+    },
+    {
+      "pattern": "select n2.n1 from n3 as n2 inner join n4 as n6 on n2.n7 = n6.n8 inner join n5 as n9 on n6.n10 = n9.n7 where n9.n11 = ? order by n6.n12 desc limit ?",
+      "count": 2,
+      "example_nl": "What is the hero's full name with the highest attribute in strength?",
+      "example_sql": "SELECT T1.full_name FROM superhero AS T1 INNER JOIN hero_attribute AS T2 ON T1.id = T2.hero_id INNER JOIN attribute AS T3 ON T2.attribute_id = T3.id WHERE T3.attribute_name = 'Strength' ORDER BY T2.attribute_value DESC LIMIT 1"
+    },
+    {
+      "pattern": "select n2.n1 from n3 as n2 inner join n4 as n5 on n2.n6 = n5.n7 where n5.n4 = ?",
+      "count": 2,
+      "example_nl": "Provide the heights of the heroes whose eye colours are amber.",
+      "example_sql": "SELECT T1.height_cm FROM superhero AS T1 INNER JOIN colour AS T2 ON T1.eye_colour_id = T2.id WHERE T2.colour = 'Amber'"
+    },
+    {
+      "pattern": "select distinct n1 from n2 where n3 = ?",
+      "count": 2,
+      "example_nl": "What is the border color of card \"Ancestor's Chosen\"?",
+      "example_sql": "SELECT DISTINCT borderColor FROM cards WHERE name = 'Ancestor''s Chosen'"
+    }
+  ]
+}

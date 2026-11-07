@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sql-dedup</title>
+<meta name="description" content="sql-dedup finds duplicate SQL patterns in an NL-to-SQL dataset, finds coverage gaps, and verifies each query on your database.">
+<style>
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface-2: #f0eee8;
+  --ink: #1c1b19;
+  --ink-2: #55524b;
+  --ink-3: #85817a;
+  --line: #dedad1;
+  --accent: #2f5fd0;
+  --accent-soft: #e5ecfb;
+  --ok: #1f7a4d;
+  --ok-soft: #e1f2e8;
+  --bad: #b3372d;
+  --bad-soft: #f8e3e0;
+  --warn: #9a6400;
+  --warn-soft: #f8eed8;
+  --code-bg: #f3f1ec;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.04);
+  --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  --sans: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141413; --surface: #1d1c1a; --surface-2: #252421; --ink: #ecebe6; --ink-2: #b5b2aa;
+    --ink-3: #8a877f; --line: #34322e; --accent: #7fa2f5; --accent-soft: #1f2a45; --ok: #5cc28e;
+    --ok-soft: #173326; --bad: #ef7f74; --bad-soft: #3a1f1c; --warn: #e0ad4f; --warn-soft: #3a2e15;
+    --code-bg: #232220; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141413; --surface: #1d1c1a; --surface-2: #252421; --ink: #ecebe6; --ink-2: #b5b2aa;
+  --ink-3: #8a877f; --line: #34322e; --accent: #7fa2f5; --accent-soft: #1f2a45; --ok: #5cc28e;
+  --ok-soft: #173326; --bad: #ef7f74; --bad-soft: #3a1f1c; --warn: #e0ad4f; --warn-soft: #3a2e15;
+  --code-bg: #232220; --shadow: none;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.6 var(--sans); -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre { font-family: var(--mono); font-size: .88em; }
+:not(pre) > code { background: var(--code-bg); padding: .1em .35em; border-radius: 4px; border: 1px solid var(--line); }
+pre {
+  background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px;
+  padding: 14px 16px; overflow-x: auto; line-height: 1.55; margin: 12px 0;
+}
+pre .c { color: var(--ink-3); }
+
+/* header */
+header.hero { padding: 56px 0 28px; border-bottom: 1px solid var(--line); }
+.eyebrow { font: 600 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-size: clamp(36px, 6vw, 54px); line-height: 1.05; margin: 12px 0 14px; letter-spacing: -.02em; }
+h1 span { color: var(--ink-3); font-weight: 400; }
+.lede { font-size: 19px; color: var(--ink-2); max-width: 720px; margin: 0; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 28px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); }
+.stat b { display: block; font-size: 26px; line-height: 1.1; letter-spacing: -.01em; }
+.stat small { color: var(--ink-2); font-size: 13px; line-height: 1.35; display: block; margin-top: 4px; }
+
+nav.toc { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+nav.toc .wrap { display: flex; gap: 4px; overflow-x: auto; padding-top: 8px; padding-bottom: 8px; scrollbar-width: none; }
+nav.toc a { white-space: nowrap; font-size: 14px; color: var(--ink-2); padding: 4px 10px; border-radius: 999px; }
+nav.toc a:hover { background: var(--surface-2); color: var(--ink); text-decoration: none; }
+
+section { padding: 44px 0 8px; }
+h2 { font-size: 26px; margin: 0 0 6px; letter-spacing: -.01em; display: flex; gap: 12px; align-items: baseline; }
+h2 .n { font: 500 14px var(--mono); color: var(--accent); }
+h3 { font-size: 18px; margin: 28px 0 8px; }
+.sub { color: var(--ink-2); margin: 0 0 18px; max-width: 760px; }
+p { max-width: 760px; }
+
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; box-shadow: var(--shadow); }
+.card h4 { margin: 0 0 6px; font-size: 16px; }
+.card p { margin: 0; color: var(--ink-2); font-size: 15px; }
+.card .tag { font: 600 11px var(--mono); color: var(--accent); background: var(--accent-soft);
+  padding: 3px 7px; border-radius: 5px; display: inline-block; margin-bottom: 10px; }
+
+figure { margin: 18px 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  padding: 18px; box-shadow: var(--shadow); }
+figure .scroll { overflow-x: auto; }
+figure svg { display: block; width: 100%; height: auto; min-width: 620px; }
+figure.narrow svg { max-width: 720px; margin: 0 auto; min-width: 520px; }
+figcaption { color: var(--ink-3); font-size: 13px; margin-top: 10px; text-align: center; }
+
+/* svg theming */
+svg text { font-family: var(--sans); fill: var(--ink); }
+svg .t-title { font-weight: 650; font-size: 15px; }
+svg .t-mono { font-family: var(--mono); font-size: 12.5px; }
+svg .t-sub { font-size: 12.5px; fill: var(--ink-2); }
+svg .t-lbl { font-size: 12px; fill: var(--ink-3); font-weight: 600; }
+svg .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+svg .box-accent { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+svg .box-alt { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.5; }
+svg .box-ok { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.5; }
+svg .box-bad { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.5; }
+svg .box-warn { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.5; }
+svg .edge { stroke: var(--ink-3); stroke-width: 1.6; fill: none; }
+svg .edge-dash { stroke: var(--accent); stroke-width: 1.6; fill: none; stroke-dasharray: 5 4; }
+svg .edge-bad { stroke: var(--bad); stroke-width: 1.6; fill: none; }
+svg .ah { fill: var(--ink-3); }
+svg .ah-accent { fill: var(--accent); }
+svg .ah-bad { fill: var(--bad); }
+svg .lbl-ok { fill: var(--ok); font-weight: 700; font-size: 12px; }
+svg .lbl-bad { fill: var(--bad); font-weight: 700; font-size: 12px; }
+svg .lbl-accent { fill: var(--accent); font-weight: 600; font-size: 12px; }
+
+/* tables */
+.table { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin: 14px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); background: var(--surface-2); }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+
+/* pipeline */
+.pipe { display: grid; gap: 0; margin: 16px 0; }
+.step { display: grid; grid-template-columns: 44px 1fr; gap: 14px; position: relative; padding-bottom: 14px; }
+.step::before { content: ""; position: absolute; left: 21px; top: 40px; bottom: 0; width: 2px; background: var(--line); }
+.step:last-child::before { display: none; }
+.step .dot { width: 44px; height: 44px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent);
+  color: var(--accent); font: 700 15px var(--mono); display: grid; place-items: center; }
+.step.final .dot { background: var(--accent); color: var(--surface); }
+.step .body { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; box-shadow: var(--shadow); }
+.step .body h4 { margin: 0 0 2px; font-size: 15px; }
+.step .body p { margin: 0 0 8px; color: var(--ink-2); font-size: 14.5px; }
+.step .body pre { margin: 0; padding: 8px 12px; font-size: 13px; }
+mark { background: var(--warn-soft); color: var(--warn); border-radius: 3px; padding: 0 2px; }
+
+/* procedure */
+ol.proc { counter-reset: s; list-style: none; padding: 0; margin: 16px 0; }
+ol.proc > li { counter-increment: s; position: relative; padding: 0 0 18px 48px; }
+ol.proc > li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 32px; height: 32px; border-radius: 8px;
+  background: var(--accent-soft); color: var(--accent); font: 700 14px var(--mono); display: grid; place-items: center; }
+ol.proc > li > b { display: block; margin-bottom: 2px; padding-top: 4px; }
+ol.proc > li p { margin: 0 0 4px; color: var(--ink-2); }
+
+/* notices (STE style: WARNING / CAUTION / NOTE) */
+.notice { border-radius: 10px; padding: 12px 16px; margin: 12px 0; border: 1px solid; max-width: 820px; }
+.notice b { font: 700 12px var(--mono); letter-spacing: .08em; display: block; margin-bottom: 4px; }
+.notice p { margin: 0; }
+.notice.warn { background: var(--bad-soft); border-color: var(--bad); }
+.notice.warn b { color: var(--bad); }
+.notice.caution { background: var(--warn-soft); border-color: var(--warn); }
+.notice.caution b { color: var(--warn); }
+.notice.note { background: var(--accent-soft); border-color: var(--accent); }
+.notice.note b { color: var(--accent); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; }
+.chip { font: 12.5px var(--mono); padding: 3px 8px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-2); }
+.tax { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.tax .card h4 { display: flex; justify-content: space-between; }
+.tax .card h4 small { color: var(--ink-3); font: 500 12px var(--mono); }
+
+footer { margin-top: 56px; padding: 24px 0 48px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 13px; }
+footer p { margin: 4px 0; max-width: none; }
+
+@media (max-width: 760px) {
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .cards, .tax { grid-template-columns: 1fr; }
+  header.hero { padding-top: 36px; }
+  .lede { font-size: 17px; }
+  figure { padding: 12px; }
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">NL → SQL dataset tool · SQLite · PostgreSQL</div>
+    <h1>sql-dedup <span>/ sqlds</span></h1>
+    <p class="lede">sql-dedup finds duplicate SQL patterns in a natural-language-to-SQL dataset.
+      It also shows the SQL syntax that your dataset does not cover.
+      It runs each query on your database to verify it. It does not change your data.</p>
+    <div class="stats">
+      <div class="stat"><b>3</b><small>levels of duplicate detection</small></div>
+      <div class="stat"><b>45</b><small>SQL syntax patterns in the coverage checklist</small></div>
+      <div class="stat"><b>221 → 200</b><small>pairs to unique patterns in <code>queries_221.json</code></small></div>
+      <div class="stat"><b>0</b><small>changes to your database during verification</small></div>
+    </div>
+  </div>
+</header>
+
+<nav class="toc"><div class="wrap">
+  <a href="#purpose">1 Purpose</a>
+  <a href="#architecture">2 Architecture</a>
+  <a href="#dedup">3 Duplicate detection</a>
+  <a href="#add">4 Add a pair</a>
+  <a href="#coverage">5 Coverage</a>
+  <a href="#start">6 Procedure</a>
+  <a href="#standalone">7 Standalone tool</a>
+  <a href="#files">8 Files</a>
+  <a href="#safety">9 Safety</a>
+</div></nav>
+
+<main class="wrap">
+
+<!-- 1 -->
+<section id="purpose">
+  <h2><span class="n">01</span> Purpose</h2>
+  <p class="sub">Use this tool to make a training dataset for SFT or RL. Each item in the dataset is one pair: a question in natural language (NL) and one SQL query. The tool solves three problems.</p>
+  <div class="cards">
+    <div class="card"><span class="tag">PROBLEM 1</span>
+      <h4>Duplicate patterns</h4>
+      <p>You can write 2000 queries, but 600 of them can have the same structure. Only the values and names are different. These duplicates do not improve the training. The tool finds them and removes them.</p></div>
+    <div class="card"><span class="tag">PROBLEM 2</span>
+      <h4>Coverage gaps</h4>
+      <p>The tool has a checklist of 45 SQL syntax patterns. It shows which patterns your dataset does not use. Then it makes candidate SQL from your real schema for each missing pattern.</p></div>
+    <div class="card"><span class="tag">PROBLEM 3</span>
+      <h4>Validation</h4>
+      <p>The tool runs each new query on your real database. It shows the row count of each table and the result rows. Then it rolls back the transaction. Thus your data stays the same.</p></div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section id="architecture">
+  <h2><span class="n">02</span> Architecture</h2>
+  <p class="sub">The tool has one main command-line program and three library modules. The main program is <code>sqlds.py</code>. You can also use <code>sqlpattern.py</code> as a standalone program on dataset files.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 880 456" role="img" aria-label="Architecture diagram: you call sqlds.py, which uses sqlpattern.py, sqlfeatures.py and sqldb.py; sqldb.py connects to your database.">
+      <defs>
+        <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+        <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-accent"/></marker>
+      </defs>
+
+      <!-- user -->
+      <rect x="340" y="14" width="200" height="46" rx="23" class="box-alt"/>
+      <text x="440" y="42" text-anchor="middle" class="t-title">You (terminal)</text>
+
+      <!-- workspace files -->
+      <rect x="20" y="104" width="160" height="70" rx="10" class="box-warn"/>
+      <text x="100" y="128" text-anchor="middle" class="t-title">Workspace files</text>
+      <text x="100" y="148" text-anchor="middle" class="t-mono">sqlds.json</text>
+      <text x="100" y="164" text-anchor="middle" class="t-mono">dataset.jsonl</text>
+
+      <!-- main CLI -->
+      <rect x="205" y="104" width="470" height="70" rx="12" class="box-accent"/>
+      <text x="440" y="132" text-anchor="middle" class="t-title">sqlds.py — workbench CLI</text>
+      <text x="440" y="154" text-anchor="middle" class="t-mono" style="font-size:11px">init · import · add · status · gaps · suggest · verify · export</text>
+
+      <!-- modules -->
+      <rect x="40" y="240" width="250" height="92" rx="12" class="box"/>
+      <text x="165" y="266" text-anchor="middle" class="t-title">sqldb.py</text>
+      <text x="165" y="288" text-anchor="middle" class="t-sub">SQLite / PostgreSQL connection</text>
+      <text x="165" y="306" text-anchor="middle" class="t-sub">schema · row counts</text>
+      <text x="165" y="322" text-anchor="middle" class="t-sub">run query, then roll back</text>
+
+      <rect x="315" y="240" width="250" height="92" rx="12" class="box"/>
+      <text x="440" y="266" text-anchor="middle" class="t-title">sqlfeatures.py</text>
+      <text x="440" y="288" text-anchor="middle" class="t-sub">45-pattern syntax checklist</text>
+      <text x="440" y="306" text-anchor="middle" class="t-mono">detect(sql)</text>
+      <text x="440" y="322" text-anchor="middle" class="t-mono">generate(schema, key)</text>
+
+      <rect x="590" y="240" width="250" height="92" rx="12" class="box"/>
+      <text x="715" y="266" text-anchor="middle" class="t-title">sqlpattern.py</text>
+      <text x="715" y="288" text-anchor="middle" class="t-sub">structural fingerprint</text>
+      <text x="715" y="306" text-anchor="middle" class="t-sub">exact · template · skeleton</text>
+      <text x="715" y="322" text-anchor="middle" class="t-mono">PatternIndex</text>
+
+      <!-- database -->
+      <path d="M60,380 a105,12 0 0,1 210,0 v50 a105,12 0 0,1 -210,0 z" class="box-ok"/>
+      <path d="M60,380 a105,12 0 0,0 210,0" class="edge" style="stroke:var(--ok)"/>
+      <text x="165" y="410" text-anchor="middle" class="t-title">Your database</text>
+      <text x="165" y="428" text-anchor="middle" class="t-sub">SQLite file or Postgres DSN</text>
+
+      <!-- sqlglot -->
+      <rect x="640" y="384" width="150" height="40" rx="8" class="box-alt"/>
+      <text x="715" y="409" text-anchor="middle" class="t-mono">sqlglot (parser)</text>
+
+      <!-- edges -->
+      <path d="M440,60 V100" class="edge" marker-end="url(#a1)"/>
+      <path d="M205,139 H184" class="edge" marker-end="url(#a1)"/>
+      <path d="M300,174 L180,236" class="edge" marker-end="url(#a1)"/>
+      <path d="M440,174 V236" class="edge" marker-end="url(#a1)"/>
+      <path d="M580,174 L700,236" class="edge" marker-end="url(#a1)"/>
+      <path d="M315,286 H294" class="edge" marker-end="url(#a1)"/>
+      <path d="M165,332 V364" class="edge" marker-end="url(#a1)"/>
+      <path d="M715,332 V380" class="edge" marker-end="url(#a1)"/>
+      <path d="M480,332 Q560,370 636,398" class="edge" marker-end="url(#a1)"/>
+
+      <!-- standalone path -->
+      <path d="M540,37 H862 V286 H844" class="edge-dash" marker-end="url(#a2)"/>
+      <text x="700" y="30" text-anchor="middle" class="lbl-accent">standalone: dedupe · stats · check</text>
+    </svg>
+    </div>
+    <figcaption>Figure 1 — Modules and data flow. A solid arrow shows a call. The dashed arrow shows the standalone use of sqlpattern.py.</figcaption>
+  </figure>
+
+  <div class="table"><table>
+    <tr><th>Module</th><th>Function</th></tr>
+    <tr><td><code>sqlds.py</code></td><td>The main CLI. It reads <code>sqlds.json</code>, keeps <code>dataset.jsonl</code>, and calls the other modules.</td></tr>
+    <tr><td><code>sqlpattern.py</code></td><td>Makes a structural fingerprint for each SQL query. Keeps the <code>PatternIndex</code> that finds duplicates. Also works as a standalone CLI.</td></tr>
+    <tr><td><code>sqlfeatures.py</code></td><td>Holds the checklist of 45 syntax patterns. <code>detect()</code> finds the patterns in a query. <code>generate()</code> makes a candidate query from your schema.</td></tr>
+    <tr><td><code>sqldb.py</code></td><td>Connects to SQLite or PostgreSQL. Reads tables, columns and foreign keys. Runs each query in a transaction and rolls it back.</td></tr>
+  </table></div>
+</section>
+
+<!-- 3 -->
+<section id="dedup">
+  <h2><span class="n">03</span> Duplicate detection</h2>
+  <p class="sub">The tool does not compare the SQL text. It compares the SQL structure. It parses each query into a syntax tree and changes the tree into a standard form. Two pairs with the same standard form are duplicates. The tool keeps the first pair and rejects the second pair.</p>
+
+  <h3>Three levels</h3>
+  <div class="table"><table>
+    <tr><th>Level</th><th>What the tool makes the same</th><th>These two queries are duplicates</th></tr>
+    <tr><td><code>exact</code></td><td>Spaces, letter case, comments, the last <code>;</code></td><td><code>select *</code> and <code>SELECT&nbsp;&nbsp;*</code></td></tr>
+    <tr><td><code>template</code></td><td>The items above, plus values. <code>IN (1,2,3)</code> becomes <code>IN (?)</code>.</td><td><code>age &gt; 21</code> and <code>age &gt; 99</code></td></tr>
+    <tr><td><code>skeleton</code> <em>(default)</em></td><td>The items above, plus names of tables, columns and aliases</td><td><code>SELECT name FROM users WHERE age &gt; 21</code> and <code>SELECT title FROM books WHERE price &gt; 5</code></td></tr>
+  </table></div>
+  <p>Use <code>skeleton</code> to get the most diverse training data. Set the level in <code>sqlds.json</code>. The table below shows the result for <code>queries_221.json</code>.</p>
+  <div class="table"><table>
+    <tr><th>Level</th><th>Unique patterns</th><th>Duplicate pairs</th><th>Duplicates</th></tr>
+    <tr><td><code>exact</code></td><td>220</td><td>1</td><td>0.5 %</td></tr>
+    <tr><td><code>template</code></td><td>215</td><td>6</td><td>2.7 %</td></tr>
+    <tr><td><code>skeleton</code></td><td>200</td><td>21</td><td>9.5 %</td></tr>
+  </table></div>
+
+  <h3>How the tool makes a fingerprint</h3>
+  <div class="pipe">
+    <div class="step"><div class="dot">0</div><div class="body">
+      <h4>Input query</h4>
+      <pre>SELECT name FROM customers WHERE city = 'Pune' AND age &gt; 30;</pre></div></div>
+    <div class="step"><div class="dot">1</div><div class="body">
+      <h4>Parse</h4>
+      <p>sqlglot parses the query into a syntax tree. The tool removes comments and the last <code>;</code>.</p></div></div>
+    <div class="step"><div class="dot">2</div><div class="body">
+      <h4>Mask the values <small>(template, skeleton)</small></h4>
+      <p>Each value becomes <code>?</code>. A list of values becomes one <code>?</code>.</p>
+      <pre>... WHERE city = <mark>?</mark> AND age &gt; <mark>?</mark></pre></div></div>
+    <div class="step"><div class="dot">3</div><div class="body">
+      <h4>Sort the AND / OR items <small>(template, skeleton)</small></h4>
+      <p>The order of the conditions is not important. Thus <code>a AND b</code> and <code>b AND a</code> give the same result.</p></div></div>
+    <div class="step"><div class="dot">4</div><div class="body">
+      <h4>Replace the names <small>(skeleton)</small></h4>
+      <p>Each table, column and alias gets a standard name in the sequence of its first use.</p>
+      <pre>SELECT <mark>c1</mark> FROM <mark>t1</mark> WHERE <mark>c2</mark> = ? AND <mark>c3</mark> &gt; ?</pre></div></div>
+    <div class="step"><div class="dot">5</div><div class="body">
+      <h4>Write the standard form</h4>
+      <p>The tool writes the tree as SQL text in lower case with single spaces.</p></div></div>
+    <div class="step final"><div class="dot">6</div><div class="body">
+      <h4>Hash and look up</h4>
+      <p>A SHA-1 hash of the text gives a 16-character key. The tool looks for the key in the <code>PatternIndex</code>. The result is <b style="color:var(--ok)">NEW</b> or <b style="color:var(--bad)">DUPLICATE</b>.</p></div></div>
+  </div>
+  <p style="color:var(--ink-3);font-size:14px">The names in step 4 are examples. The real standard form can look different.</p>
+
+  <div class="notice note"><b>NOTE</b>
+    <p>If sqlglot cannot parse a query, the tool uses a regex normalizer. Use <code>--strict</code> to change this. With <code>--strict</code>, an unparsed query is a duplicate only if the text is the same.</p></div>
+  <div class="notice note"><b>NOTE</b>
+    <p>One SQL structure can answer different business questions. For this case, use <code>--nl-mode fuzzy</code>. Then two pairs are duplicates only if the questions are also similar. The limit is <code>--nl-threshold</code> (token Jaccard, default 0.6).</p></div>
+</section>
+
+<!-- 4 -->
+<section id="add">
+  <h2><span class="n">04</span> Add a pair</h2>
+  <p class="sub">The command <code>sqlds.py add</code> does a duplicate check, a database check and a feature check. Figure 2 shows the sequence.</p>
+  <figure class="narrow">
+    <div class="scroll">
+    <svg viewBox="0 0 720 560" role="img" aria-label="Flowchart of the add command.">
+      <defs>
+        <marker id="b1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+        <marker id="b2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="ah-bad"/></marker>
+      </defs>
+
+      <rect x="110" y="10" width="300" height="44" rx="22" class="box-alt"/>
+      <text x="260" y="37" text-anchor="middle" class="t-mono">sqlds.py add --nl "…" --sql "…"</text>
+
+      <rect x="110" y="84" width="300" height="44" rx="10" class="box"/>
+      <text x="260" y="111" text-anchor="middle" class="t-title" style="font-size:14px">Make fingerprint, look up in index</text>
+
+      <polygon points="260,150 380,190 260,230 140,190" class="box-accent"/>
+      <text x="260" y="195" text-anchor="middle" class="t-title" style="font-size:14px">Pattern in index?</text>
+
+      <rect x="480" y="168" width="220" height="44" rx="10" class="box-bad"/>
+      <text x="590" y="188" text-anchor="middle" class="t-title" style="font-size:14px">DUPLICATE — not added</text>
+      <text x="590" y="204" text-anchor="middle" class="t-sub">exit code 3</text>
+
+      <rect x="110" y="260" width="300" height="44" rx="10" class="box"/>
+      <text x="260" y="287" text-anchor="middle" class="t-title" style="font-size:14px">Run SQL on database, then roll back</text>
+
+      <polygon points="260,326 380,366 260,406 140,366" class="box-accent"/>
+      <text x="260" y="371" text-anchor="middle" class="t-title" style="font-size:14px">Query ran?</text>
+
+      <rect x="480" y="344" width="220" height="44" rx="10" class="box-bad"/>
+      <text x="590" y="364" text-anchor="middle" class="t-title" style="font-size:14px">FAILED — not added</text>
+      <text x="590" y="380" text-anchor="middle" class="t-sub">exit code 2</text>
+
+      <rect x="110" y="436" width="300" height="44" rx="10" class="box"/>
+      <text x="260" y="463" text-anchor="middle" class="t-title" style="font-size:14px">Detect syntax features</text>
+
+      <rect x="110" y="508" width="300" height="44" rx="10" class="box-ok"/>
+      <text x="260" y="535" text-anchor="middle" class="t-title" style="font-size:14px">Write to dataset.jsonl, show new coverage</text>
+
+      <path d="M260,54 V80" class="edge" marker-end="url(#b1)"/>
+      <path d="M260,128 V146" class="edge" marker-end="url(#b1)"/>
+      <path d="M260,230 V256" class="edge" marker-end="url(#b1)"/>
+      <text x="272" y="248" class="lbl-ok">No</text>
+      <path d="M380,190 H476" class="edge-bad" marker-end="url(#b2)"/>
+      <text x="428" y="182" text-anchor="middle" class="lbl-bad">Yes</text>
+      <path d="M260,304 V322" class="edge" marker-end="url(#b1)"/>
+      <path d="M260,406 V432" class="edge" marker-end="url(#b1)"/>
+      <text x="272" y="424" class="lbl-ok">Yes</text>
+      <path d="M380,366 H476" class="edge-bad" marker-end="url(#b2)"/>
+      <text x="428" y="358" text-anchor="middle" class="lbl-bad">No</text>
+      <path d="M260,480 V504" class="edge" marker-end="url(#b1)"/>
+
+      <text x="590" y="236" text-anchor="middle" class="t-lbl">--force: add it</text>
+      <text x="590" y="412" text-anchor="middle" class="t-lbl">--force / --no-verify: add it</text>
+    </svg>
+    </div>
+    <figcaption>Figure 2 — The add command. <code>--dry-run</code> does all checks but does not write the pair.</figcaption>
+  </figure>
+</section>
+
+<!-- 5 -->
+<section id="coverage">
+  <h2><span class="n">05</span> Coverage and gaps</h2>
+  <p class="sub">The tool finds the syntax patterns in each query. The coverage is the set of all patterns in the dataset. The gaps are the checklist patterns that are not in the coverage.</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 880 190" role="img" aria-label="Coverage loop: dataset, detect, gaps, suggest, you write the question and import, back to dataset.">
+      <defs>
+        <marker id="c1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+        <marker id="c2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="ah-accent"/></marker>
+      </defs>
+      <rect x="10" y="20" width="150" height="74" rx="12" class="box-warn"/>
+      <text x="85" y="52" text-anchor="middle" class="t-title">Dataset</text>
+      <text x="85" y="72" text-anchor="middle" class="t-mono">dataset.jsonl</text>
+
+      <rect x="192" y="20" width="150" height="74" rx="12" class="box"/>
+      <text x="267" y="52" text-anchor="middle" class="t-title">Detect</text>
+      <text x="267" y="72" text-anchor="middle" class="t-sub">patterns per pair</text>
+
+      <rect x="374" y="20" width="150" height="74" rx="12" class="box"/>
+      <text x="449" y="52" text-anchor="middle" class="t-title">Gaps</text>
+      <text x="449" y="72" text-anchor="middle" class="t-sub">checklist − coverage</text>
+
+      <rect x="556" y="20" width="150" height="74" rx="12" class="box"/>
+      <text x="631" y="52" text-anchor="middle" class="t-title">Suggest</text>
+      <text x="631" y="72" text-anchor="middle" class="t-sub">SQL from your schema</text>
+
+      <rect x="738" y="20" width="132" height="74" rx="12" class="box-accent"/>
+      <text x="804" y="46" text-anchor="middle" class="t-title">You</text>
+      <text x="804" y="66" text-anchor="middle" class="t-sub">write question,</text>
+      <text x="804" y="82" text-anchor="middle" class="t-sub">set real values</text>
+
+      <path d="M160,57 H188" class="edge" marker-end="url(#c1)"/>
+      <path d="M342,57 H370" class="edge" marker-end="url(#c1)"/>
+      <path d="M524,57 H552" class="edge" marker-end="url(#c1)"/>
+      <path d="M706,57 H734" class="edge" marker-end="url(#c1)"/>
+      <path d="M804,94 V150 H85 V98" class="edge-dash" marker-end="url(#c2)"/>
+      <text x="444" y="172" text-anchor="middle" class="lbl-accent">sqlds.py import candidates.jsonl --verify</text>
+      <text x="631" y="114" text-anchor="middle" class="t-lbl">candidates.jsonl</text>
+    </svg>
+    </div>
+    <figcaption>Figure 3 — The coverage loop. Do the loop again until <code>gaps</code> shows no missing patterns.</figcaption>
+  </figure>
+
+  <h3>The 45 patterns in the checklist</h3>
+  <div class="tax">
+    <div class="card"><h4>Basic selection <small>6</small></h4><div class="chips">
+      <span class="chip">select_star</span><span class="chip">select_columns</span><span class="chip">distinct</span><span class="chip">order_by</span><span class="chip">top_n</span><span class="chip">limit_offset</span></div></div>
+    <div class="card"><h4>Filters <small>8</small></h4><div class="chips">
+      <span class="chip">where_equality</span><span class="chip">where_comparison</span><span class="chip">where_between</span><span class="chip">where_in_list</span><span class="chip">where_like</span><span class="chip">where_null</span><span class="chip">where_and_or</span><span class="chip">where_not</span></div></div>
+    <div class="card"><h4>Aggregates <small>6</small></h4><div class="chips">
+      <span class="chip">count</span><span class="chip">agg_sum_avg</span><span class="chip">agg_min_max</span><span class="chip">group_by</span><span class="chip">having</span><span class="chip">count_distinct</span></div></div>
+    <div class="card"><h4>Joins <small>6</small></h4><div class="chips">
+      <span class="chip">inner_join</span><span class="chip">left_join</span><span class="chip">multi_join</span><span class="chip">self_join</span><span class="chip">cross_join</span><span class="chip">join_agg</span></div></div>
+    <div class="card"><h4>Subqueries <small>5</small></h4><div class="chips">
+      <span class="chip">subquery_in</span><span class="chip">subquery_scalar</span><span class="chip">subquery_exists</span><span class="chip">derived_table</span><span class="chip">correlated</span></div></div>
+    <div class="card"><h4>Advanced <small>11</small></h4><div class="chips">
+      <span class="chip">cte</span><span class="chip">recursive_cte</span><span class="chip">union</span><span class="chip">intersect_except</span><span class="chip">window_ranking</span><span class="chip">window_agg</span><span class="chip">case_when</span><span class="chip">date_function</span><span class="chip">string_function</span><span class="chip">arithmetic_expr</span><span class="chip">coalesce_ifnull</span></div></div>
+    <div class="card"><h4>Data changes (DML) <small>3</small></h4><div class="chips">
+      <span class="chip">insert</span><span class="chip">update</span><span class="chip">delete</span></div>
+      <p style="margin-top:8px;font-size:14px">The tool finds these patterns, but <code>suggest</code> does not make them. Write DML pairs manually.</p></div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section id="start">
+  <h2><span class="n">06</span> Procedure: make a dataset</h2>
+  <p class="sub">You must have Python 3.10 or higher and <code>sqlglot</code>. For PostgreSQL, you must also have <code>psycopg</code> or <code>psycopg2</code>.</p>
+  <ol class="proc">
+    <li><b>Connect the workspace to your database.</b>
+      <pre>python sqlds.py init --db demo_bank.db
+<span class="c"># or: python sqlds.py init --db postgresql://user:pass@host:5432/mydb</span></pre>
+      <p>To get a demo database, run <code>python make_demo_db.py</code> first.</p></li>
+    <li><b>Import your current pairs.</b>
+      <pre>python sqlds.py import existing_pairs.jsonl --verify</pre>
+      <p>The tool accepts <code>.jsonl</code>, <code>.json</code> and <code>.csv</code>. It finds the field names automatically. It removes duplicates.</p></li>
+    <li><b>Add new pairs one at a time.</b>
+      <pre>python sqlds.py add --nl "Total balance per city for premium customers" \
+  --sql "SELECT c.city, SUM(a.balance) FROM customers c JOIN accounts a ON c.id = a.customer_id WHERE c.segment = 'premium' GROUP BY c.city"</pre></li>
+    <li><b>Find the missing patterns.</b>
+      <pre>python sqlds.py status
+python sqlds.py gaps</pre></li>
+    <li><b>Make candidate SQL for each gap.</b>
+      <pre>python sqlds.py suggest      <span class="c"># writes candidates.jsonl</span></pre>
+      <p>Write the question for each candidate. Replace the placeholder values with real business values.</p></li>
+    <li><b>Import the candidates.</b>
+      <pre>python sqlds.py import candidates.jsonl --verify</pre></li>
+    <li><b>Check a query manually (optional).</b>
+      <pre>python sqlds.py verify --sql "SELECT ... FROM customers c JOIN accounts a ON ..."</pre>
+      <p>The tool shows the row count of each table and the result rows. It does not commit.</p></li>
+    <li><b>Export the dataset.</b>
+      <pre>python sqlds.py export --verified-only   <span class="c"># writes sft_dataset.jsonl {question, sql}</span></pre></li>
+  </ol>
+  <p>Other commands: <code>schema</code> shows tables, columns, keys and row counts. <code>coverage</code> shows the number of queries for each pattern.</p>
+</section>
+
+<!-- 7 -->
+<section id="standalone">
+  <h2><span class="n">07</span> Standalone tool</h2>
+  <p class="sub">Use <code>sqlpattern.py</code> for a one-time job on a file. It does not need a workspace or a database.</p>
+  <pre>python sqlpattern.py stats data.jsonl                     <span class="c"># duplicate % at each level</span>
+python sqlpattern.py dedupe data.jsonl --report report.json --html review.html
+python sqlpattern.py build-index data.jsonl -o index.json
+python sqlpattern.py check --index index.json --sql "SELECT ..."   <span class="c"># NEW or DUPLICATE</span></pre>
+  <div class="table"><table>
+    <tr><th>Option</th><th>Function</th></tr>
+    <tr><td><code>--level</code></td><td>Set the level: <code>exact</code>, <code>template</code> or <code>skeleton</code>.</td></tr>
+    <tr><td><code>--html</code></td><td>Write an HTML report. Use it to see and filter the duplicate groups in a browser.</td></tr>
+    <tr><td><code>--save-index</code></td><td>Save the pattern index. Use it later with <code>check</code>.</td></tr>
+    <tr><td><code>--nl-mode fuzzy</code></td><td>Compare the questions too.</td></tr>
+    <tr><td><code>--strict</code></td><td>Do not use the regex fallback for unparsed queries.</td></tr>
+    <tr><td><code>--dialect</code></td><td>Set the SQL dialect for the parser, for example <code>postgres</code> or <code>sqlite</code>.</td></tr>
+  </table></div>
+</section>
+
+<!-- 8 -->
+<section id="files">
+  <h2><span class="n">08</span> Files</h2>
+  <div class="table"><table>
+    <tr><th>File</th><th>Contents</th></tr>
+    <tr><td><code>sqlds.py</code></td><td>The main CLI</td></tr>
+    <tr><td><code>sqlpattern.py</code></td><td>Fingerprints and the standalone duplicate CLI</td></tr>
+    <tr><td><code>sqlfeatures.py</code></td><td>The pattern checklist, the detectors and the generators</td></tr>
+    <tr><td><code>sqldb.py</code></td><td>The database connection, the schema reader and the safe query runner</td></tr>
+    <tr><td><code>test_sqlpattern.py</code></td><td>Tests for the fingerprints. Run <code>python -m pytest test_sqlpattern.py</code>.</td></tr>
+    <tr><td><code>sqlds.json</code></td><td>The workspace settings: database, dataset file, level</td></tr>
+    <tr><td><code>dataset.jsonl</code></td><td>The dataset. Each line: <code>{question, sql, features, verified, added_at}</code></td></tr>
+    <tr><td><code>make_demo_db.py</code></td><td>Makes <code>demo_bank.db</code> with five tables: branches, employees, customers, accounts, transactions</td></tr>
+  </table></div>
+</section>
+
+<!-- 9 -->
+<section id="safety">
+  <h2><span class="n">09</span> Safety</h2>
+  <div class="notice warn"><b>WARNING</b>
+    <p>The option <code>verify --commit</code> writes DML changes to your database. Use it only when you want these changes. Do not use it on a production database.</p></div>
+  <div class="notice caution"><b>CAUTION</b>
+    <p>Candidate queries from <code>suggest</code> have placeholder values, for example <code>'VALUE'</code> or <code>&gt; 100</code>. Replace them with real values before you add the pairs.</p></div>
+  <div class="notice note"><b>NOTE</b>
+    <p>Without <code>--commit</code>, each verification runs in a transaction that the tool rolls back. Your data does not change.</p></div>
+  <div class="notice note"><b>NOTE</b>
+    <p>The duplicate check uses the structure. Thus you can change the text of a candidate query. A small text change does not make a duplicate into a new pattern.</p></div>
+</section>
+
+</main>
+
+<footer><div class="wrap">
+  <p><b>sql-dedup</b>. The CLI files keep the names <code>sqlds.py</code> and <code>sqlpattern.py</code>.</p>
+  <p>The text in this document follows ASD-STE100 Simplified Technical English.</p>
+</div></footer>
+
+</body>
+</html>

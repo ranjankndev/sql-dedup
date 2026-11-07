@@ -1,0 +1,8 @@
+{"question": "Show all customers", "sql": "SELECT * FROM customers"}
+{"question": "Customers older than 30", "sql": "SELECT name FROM customers WHERE age > 30"}
+{"question": "Customers named John", "sql": "SELECT * FROM customers WHERE name = 'John'"}
+{"question": "Customers in given cities", "sql": "SELECT * FROM customers WHERE city IN ('NY', 'LA', 'SF')"}
+{"question": "Join customers to accounts", "sql": "SELECT c.name, a.balance FROM customers c JOIN accounts a ON c.id = a.customer_id"}
+{"question": "Accounts per customer", "sql": "SELECT customer_id, COUNT(*) FROM accounts GROUP BY customer_id"}
+{"question": "Total balance per customer above 500", "sql": "SELECT customer_id, SUM(balance) FROM accounts GROUP BY customer_id HAVING SUM(balance) > 500"}
+{"question": "Total balance per city for premium customers, highest first", "sql": "SELECT c.city, SUM(a.balance) AS total_balance FROM customers c JOIN accounts a ON c.id = a.customer_id WHERE c.segment = 'premium' GROUP BY c.city ORDER BY total_balance DESC"}

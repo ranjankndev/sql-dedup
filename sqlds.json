@@ -1,0 +1,5 @@
+{
+  "db": "demo_bank.db",
+  "dataset": "dataset.jsonl",
+  "level": "skeleton"
+}

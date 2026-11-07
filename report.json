@@ -1,0 +1,36 @@
+{
+  "input": "C:\\dev\\sqlpattern\\sample_data.jsonl",
+  "level": "skeleton",
+  "nl_mode": "off",
+  "total": 12,
+  "unique_patterns": 7,
+  "kept": 7,
+  "dropped": 5,
+  "sql_parse_failures": 0,
+  "duplicate_groups": [
+    {
+      "pattern": "select * from n1",
+      "count": 3,
+      "example_nl": "Show all customers",
+      "example_sql": "SELECT * FROM customers"
+    },
+    {
+      "pattern": "select n1 from n2 where n3 > ?",
+      "count": 2,
+      "example_nl": "Customers older than 30",
+      "example_sql": "SELECT name FROM customers WHERE age > 30"
+    },
+    {
+      "pattern": "select * from n1 where n2 = ?",
+      "count": 2,
+      "example_nl": "Customers named John",
+      "example_sql": "SELECT * FROM customers WHERE name = 'John'"
+    },
+    {
+      "pattern": "select * from n1 where n2 in (?)",
+      "count": 2,
+      "example_nl": "Customers in given cities",
+      "example_sql": "SELECT * FROM customers WHERE city IN ('NY', 'LA', 'SF')"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{"question": "Show all customers", "sql": "SELECT * FROM customers"}
+{"question": "List every customer", "sql": "select  *  from customers;"}
+{"question": "Show all accounts", "sql": "SELECT * FROM accounts"}
+{"question": "Customers older than 30", "sql": "SELECT name FROM customers WHERE age > 30"}
+{"question": "Accounts with balance above 1000", "sql": "SELECT acct_no FROM accounts WHERE balance > 1000"}
+{"question": "Customers named John", "sql": "SELECT * FROM customers WHERE name = 'John'"}
+{"question": "Customers named Mary", "sql": "SELECT * FROM customers WHERE name = 'Mary'"}
+{"question": "Customers in given cities", "sql": "SELECT * FROM customers WHERE city IN ('NY', 'LA', 'SF')"}
+{"question": "Customers in one city", "sql": "SELECT * FROM customers WHERE city IN ('Chicago')"}
+{"question": "Join customers to accounts", "sql": "SELECT c.name, a.balance FROM customers c JOIN accounts a ON c.id = a.customer_id"}
+{"question": "Accounts per customer", "sql": "SELECT customer_id, COUNT(*) FROM accounts GROUP BY customer_id"}
+{"question": "Total balance per customer above 500", "sql": "SELECT customer_id, SUM(balance) FROM accounts GROUP BY customer_id HAVING SUM(balance) > 500"}
